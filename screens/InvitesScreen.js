@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
-import { Alert, Linking, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Linking, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
+import AppScrollView from '../components/AppScrollView';
 import EmptyState from '../components/EmptyState';
 import { ui } from '../components/uiStyles';
 import { colors } from '../theme';
 import { getGroup } from '../utils/balances';
 
-export default function InvitesScreen({ groups, invitations, activeGroupId, createInvitation, acceptInvitation }) {
+export default function InvitesScreen({ groups, invitations, activeGroupId, refreshing, refresh, createInvitation, acceptInvitation }) {
   const [groupId, setGroupId] = useState(activeGroupId || groups[0]?.id);
   const [invitedName, setInvitedName] = useState('');
   const [invitedEmail, setInvitedEmail] = useState('');
@@ -47,7 +48,7 @@ export default function InvitesScreen({ groups, invitations, activeGroupId, crea
   };
 
   return (
-    <ScrollView style={ui.screen} contentContainerStyle={ui.screenPad}>
+    <AppScrollView style={ui.screen} contentContainerStyle={ui.screenPad} refreshing={refreshing} onRefresh={refresh}>
       <Text style={ui.sectionTitle}>Invite by email</Text>
       {groups.length === 0 ? (
         <EmptyState icon="account-group-outline" title="No group to invite into" body="Create a group first." />
@@ -92,13 +93,13 @@ export default function InvitesScreen({ groups, invitations, activeGroupId, crea
             </View>
             <View style={styles.main}>
               <Text style={ui.title}>{invite.invitedName || invite.invitedEmail}</Text>
-              <Text style={ui.meta}>{getGroup(groups, invite.groupId)?.name} · code {invite.code}</Text>
+              <Text style={ui.meta}>{getGroup(groups, invite.groupId)?.name} - code {invite.code}</Text>
             </View>
             <Text style={[styles.status, invite.status === 'accepted' && styles.accepted]}>{invite.status}</Text>
           </View>
         ))
       )}
-    </ScrollView>
+    </AppScrollView>
   );
 }
 

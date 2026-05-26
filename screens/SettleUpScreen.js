@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
+import AppScrollView from '../components/AppScrollView';
 import Avatar from '../components/Avatar';
 import EmptyState from '../components/EmptyState';
 import { ui } from '../components/uiStyles';
@@ -10,7 +11,7 @@ import { calculateBalances, simplifyDebts } from '../utils/balances';
 import { makeId, today } from '../utils/ids';
 import { formatMoney, round2 } from '../utils/money';
 
-export default function SettleUpScreen({ people, groups, expenses, settlements, activeGroupId, recordSettlement }) {
+export default function SettleUpScreen({ people, groups, expenses, settlements, activeGroupId, refreshing, refresh, recordSettlement }) {
   const balances = useMemo(() => calculateBalances(people, expenses, settlements, activeGroupId), [people, expenses, settlements, activeGroupId]);
   const payments = useMemo(() => simplifyDebts(balances, people), [balances, people]);
   const [selectedGroup, setSelectedGroup] = useState(activeGroupId || groups[0]?.id);
@@ -42,7 +43,7 @@ export default function SettleUpScreen({ people, groups, expenses, settlements, 
   };
 
   return (
-    <ScrollView style={ui.screen} contentContainerStyle={ui.screenPad}>
+    <AppScrollView style={ui.screen} contentContainerStyle={ui.screenPad} refreshing={refreshing} onRefresh={refresh}>
       <Text style={ui.sectionTitle}>Suggested settlements</Text>
       {payments.length === 0 ? (
         <EmptyState title="All settled up" body="No simplified payments are needed right now." />
@@ -99,7 +100,7 @@ export default function SettleUpScreen({ people, groups, expenses, settlements, 
           <Text style={ui.primaryButtonText}>Record payment</Text>
         </TouchableOpacity>
       </View>
-    </ScrollView>
+    </AppScrollView>
   );
 }
 

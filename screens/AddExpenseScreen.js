@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
+import AppScrollView from '../components/AppScrollView';
 import Avatar from '../components/Avatar';
 import EmptyState from '../components/EmptyState';
 import { ui } from '../components/uiStyles';
@@ -11,7 +12,7 @@ import { getGroup, getGroupMembers, splitAmount } from '../utils/balances';
 import { makeId, today } from '../utils/ids';
 import { formatMoney, round2 } from '../utils/money';
 
-export default function AddExpenseScreen({ people, groups, activeGroupId, addExpense }) {
+export default function AddExpenseScreen({ people, groups, activeGroupId, refreshing, refresh, addExpense }) {
   const firstGroupId = activeGroupId || groups[0]?.id;
   const [groupId, setGroupId] = useState(firstGroupId);
   const [description, setDescription] = useState('');
@@ -84,14 +85,14 @@ export default function AddExpenseScreen({ people, groups, activeGroupId, addExp
 
   if (groups.length === 0) {
     return (
-      <ScrollView style={ui.screen} contentContainerStyle={ui.screenPad}>
+      <AppScrollView style={ui.screen} contentContainerStyle={ui.screenPad} refreshing={refreshing} onRefresh={refresh}>
         <EmptyState icon="account-group-outline" title="No groups yet" body="Create a group before adding expenses." />
-      </ScrollView>
+      </AppScrollView>
     );
   }
 
   return (
-    <ScrollView style={ui.screen} contentContainerStyle={ui.screenPad}>
+    <AppScrollView style={ui.screen} contentContainerStyle={ui.screenPad} refreshing={refreshing} onRefresh={refresh}>
       <Text style={ui.sectionTitle}>New expense</Text>
       <View style={ui.card}>
         <Text style={ui.label}>Group</Text>
@@ -175,7 +176,7 @@ export default function AddExpenseScreen({ people, groups, activeGroupId, addExp
           <Text style={ui.primaryButtonText}>Save expense</Text>
         </TouchableOpacity>
       </View>
-    </ScrollView>
+    </AppScrollView>
   );
 }
 

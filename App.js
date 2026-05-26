@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { SafeAreaView, StatusBar, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { BackHandler, Dimensions, PanResponder, SafeAreaView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import Header from './components/Header';
@@ -20,10 +20,49 @@ export default function App() {
   const [activeGroupId, setActiveGroupId] = useState(null);
 
   const activeGroup = data.groups.find((group) => group.id === activeGroupId);
+  const screenWidth = Dimensions.get('window').width;
+
+  const goBackFromGroup = () => {
+    if (activeGroupId) {
+      setActiveGroupId(null);
+      setTab('dashboard');
+      return true;
+    }
+    return false;
+  };
+
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', goBackFromGroup);
+    return () => subscription.remove();
+  }, [activeGroupId]);
+
+  const backSwipeResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (event, gesture) =>
+          Boolean(activeGroupId) &&
+          event.nativeEvent.pageX > screenWidth - 36 &&
+          gesture.dx < -18 &&
+          Math.abs(gesture.dx) > Math.abs(gesture.dy),
+        onPanResponderRelease: (event, gesture) => {
+          if (gesture.dx < -55) {
+            goBackFromGroup();
+          }
+        },
+      }),
+    [activeGroupId, screenWidth]
+  );
 
   const openGroup = (groupId) => {
     setActiveGroupId(groupId);
     setTab('dashboard');
+  };
+
+  const changeTab = (nextTab) => {
+    if (nextTab === 'dashboard') {
+      setActiveGroupId(null);
+    }
+    setTab(nextTab);
   };
 
   const renderContent = () => {
@@ -46,7 +85,16 @@ export default function App() {
     }
 
     if (tab === 'dashboard') {
-      return <DashboardScreen {...data} activeGroupId={activeGroupId} onOpenGroup={openGroup} onAddExpense={() => setTab('add')} onSettle={() => setTab('settle')} />;
+      return (
+        <DashboardScreen
+          {...data}
+          activeGroupId={activeGroupId}
+          onOpenGroup={openGroup}
+          onAddExpense={() => setTab('add')}
+          onSettle={() => setTab('settle')}
+          onGroupClosed={() => setActiveGroupId(null)}
+        />
+      );
     }
 
     if (tab === 'groups') {
@@ -73,11 +121,11 @@ export default function App() {
   };
 
   return (
-    <SafeAreaView style={styles.app}>
+    <SafeAreaView style={styles.app} {...backSwipeResponder.panHandlers}>
       <StatusBar barStyle="dark-content" />
       <Header activeGroup={activeGroup} onBack={() => setActiveGroupId(null)} />
       {renderContent()}
-      <TabBar activeTab={tab} onChange={setTab} />
+      <TabBar activeTab={tab} onChange={changeTab} />
     </SafeAreaView>
   );
 }

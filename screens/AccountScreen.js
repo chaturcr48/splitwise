@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
+import AppScrollView from '../components/AppScrollView';
 import Avatar from '../components/Avatar';
 import { ui } from '../components/uiStyles';
 import { colors } from '../theme';
 
-export default function AccountScreen({ people, currentUser, updateCurrentUser, addFriend }) {
+export default function AccountScreen({ people, currentUser, refreshing, refresh, updateCurrentUser, addFriend }) {
   const [profileName, setProfileName] = useState(currentUser?.name || '');
   const [profileEmail, setProfileEmail] = useState(currentUser?.email || '');
   const [friendName, setFriendName] = useState('');
@@ -37,7 +38,7 @@ export default function AccountScreen({ people, currentUser, updateCurrentUser, 
   };
 
   return (
-    <ScrollView style={ui.screen} contentContainerStyle={ui.screenPad}>
+    <AppScrollView style={ui.screen} contentContainerStyle={ui.screenPad} refreshing={refreshing} onRefresh={refresh}>
       <Text style={ui.sectionTitle}>Your profile</Text>
       <View style={ui.card}>
         <TextInput style={ui.input} placeholder="Your name" value={profileName} onChangeText={setProfileName} />
@@ -69,7 +70,7 @@ export default function AccountScreen({ people, currentUser, updateCurrentUser, 
           {person.isCurrentUser ? <Text style={styles.badge}>You</Text> : null}
         </View>
       ))}
-    </ScrollView>
+    </AppScrollView>
   );
 }
 

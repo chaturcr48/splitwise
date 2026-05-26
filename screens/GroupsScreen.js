@@ -1,16 +1,18 @@
 import React, { useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
+import AppScrollView from '../components/AppScrollView';
 import Avatar from '../components/Avatar';
 import EmptyState from '../components/EmptyState';
 import { ui } from '../components/uiStyles';
 import { colors } from '../theme';
 
-export default function GroupsScreen({ people, groups, currentUser, createGroup, onOpenGroup }) {
+export default function GroupsScreen({ people, groups, deletedGroups, currentUser, refreshing, refresh, createGroup, restoreGroup, onOpenGroup }) {
   const [name, setName] = useState('');
   const [type, setType] = useState('Trip');
   const [memberIds, setMemberIds] = useState([]);
+  const [restoreCode, setRestoreCode] = useState('');
 
   const friends = people.filter((person) => person.id !== currentUser?.id);
 
@@ -29,8 +31,24 @@ export default function GroupsScreen({ people, groups, currentUser, createGroup,
     onOpenGroup(groupId);
   };
 
+  const restoreDeletedGroup = async () => {
+    if (!restoreCode.trim()) {
+      Alert.alert('Restore code needed', 'Enter the restore code from the deletion email.');
+      return;
+    }
+
+    try {
+      const groupId = await restoreGroup(restoreCode);
+      setRestoreCode('');
+      onOpenGroup(groupId);
+      Alert.alert('Group restored', 'The group is active again and members were notified.');
+    } catch (err) {
+      Alert.alert('Could not restore group', err.message);
+    }
+  };
+
   return (
-    <ScrollView style={ui.screen} contentContainerStyle={ui.screenPad}>
+    <AppScrollView style={ui.screen} contentContainerStyle={ui.screenPad} refreshing={refreshing} onRefresh={refresh}>
       <Text style={ui.sectionTitle}>Create group</Text>
       <View style={ui.card}>
         <TextInput style={ui.input} placeholder="Group name" value={name} onChangeText={setName} />
@@ -60,6 +78,32 @@ export default function GroupsScreen({ people, groups, currentUser, createGroup,
         </TouchableOpacity>
       </View>
 
+      <Text style={ui.sectionTitle}>Restore deleted group</Text>
+      <View style={ui.card}>
+        <TextInput style={ui.input} placeholder="Restore code from email" value={restoreCode} onChangeText={setRestoreCode} autoCapitalize="characters" />
+        <TouchableOpacity style={ui.primaryButton} onPress={restoreDeletedGroup}>
+          <MaterialCommunityIcons name="backup-restore" size={20} color="#FFFFFF" />
+          <Text style={ui.primaryButtonText}>Restore group</Text>
+        </TouchableOpacity>
+      </View>
+
+      {deletedGroups?.length ? (
+        <>
+          <Text style={ui.sectionTitle}>Recently deleted</Text>
+          {deletedGroups.map((group) => (
+            <View key={group.id} style={ui.rowCard}>
+              <View style={styles.iconBubbleDanger}>
+                <MaterialCommunityIcons name="delete-clock-outline" size={23} color={colors.danger} />
+              </View>
+              <View style={styles.main}>
+                <Text style={ui.title}>{group.name}</Text>
+                <Text style={ui.meta}>Restore code: {group.restoreCode}</Text>
+              </View>
+            </View>
+          ))}
+        </>
+      ) : null}
+
       <Text style={ui.sectionTitle}>Your groups</Text>
       {groups.length === 0 ? (
         <EmptyState icon="account-group-outline" title="No groups yet" body="Groups you create or accept invitations for will appear here." />
@@ -71,13 +115,13 @@ export default function GroupsScreen({ people, groups, currentUser, createGroup,
             </View>
             <View style={styles.main}>
               <Text style={ui.title}>{group.name}</Text>
-              <Text style={ui.meta}>{group.memberIds.length} members · {group.type}</Text>
+              <Text style={ui.meta}>{group.memberIds.length} members - {group.type}</Text>
             </View>
             <MaterialCommunityIcons name="chevron-right" size={24} color={colors.muted} />
           </TouchableOpacity>
         ))
       )}
-    </ScrollView>
+    </AppScrollView>
   );
 }
 
@@ -114,6 +158,14 @@ const styles = StyleSheet.create({
   iconBubble: {
     alignItems: 'center',
     backgroundColor: colors.accentSoft,
+    borderRadius: 8,
+    height: 44,
+    justifyContent: 'center',
+    width: 44,
+  },
+  iconBubbleDanger: {
+    alignItems: 'center',
+    backgroundColor: '#FDECEC',
     borderRadius: 8,
     height: 44,
     justifyContent: 'center',

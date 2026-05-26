@@ -28,7 +28,10 @@ async function migrate(db) {
       type TEXT NOT NULL,
       icon TEXT NOT NULL,
       created_by TEXT NOT NULL,
-      created_at TEXT NOT NULL
+      created_at TEXT NOT NULL,
+      deleted_at TEXT,
+      deleted_by TEXT,
+      restore_code TEXT
     );
 
     CREATE TABLE IF NOT EXISTS group_members (
@@ -36,6 +39,7 @@ async function migrate(db) {
       user_id TEXT NOT NULL,
       role TEXT NOT NULL DEFAULT 'member',
       joined_at TEXT NOT NULL,
+      left_at TEXT,
       PRIMARY KEY (group_id, user_id)
     );
 
@@ -80,7 +84,23 @@ async function migrate(db) {
       settlement_date TEXT NOT NULL,
       created_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS group_notifications (
+      id TEXT PRIMARY KEY NOT NULL,
+      group_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      body TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      read_at TEXT
+    );
   `);
+
+  await ensureColumn(db, 'groups', 'deleted_at', 'TEXT');
+  await ensureColumn(db, 'groups', 'deleted_by', 'TEXT');
+  await ensureColumn(db, 'groups', 'restore_code', 'TEXT');
+  await ensureColumn(db, 'group_members', 'left_at', 'TEXT');
 
   const users = await db.getAllAsync('SELECT id FROM users LIMIT 1;');
   if (users.length === 0) {
@@ -92,5 +112,12 @@ async function migrate(db) {
       '#1CC29F',
       new Date().toISOString()
     );
+  }
+}
+
+async function ensureColumn(db, table, column, definition) {
+  const columns = await db.getAllAsync(`PRAGMA table_info(${table});`);
+  if (!columns.some((item) => item.name === column)) {
+    await db.execAsync(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition};`);
   }
 }
