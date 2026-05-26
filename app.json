@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "Splitwise",
+    "slug": "splitwise",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTabletMode": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#ffffff"
+      }
+    },
+    "plugins": [
+      "expo-sqlite"
+    ]
+  }
+}
