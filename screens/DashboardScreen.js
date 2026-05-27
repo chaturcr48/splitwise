@@ -388,7 +388,7 @@ function GroupSettingsModal({
             <TextInput style={ui.input} placeholder="Friend name" value={inviteName} onChangeText={setInviteName} />
             <TextInput style={ui.input} placeholder="Friend email" value={inviteEmail} onChangeText={setInviteEmail} keyboardType="email-address" autoCapitalize="none" />
             <TouchableOpacity style={ui.primaryButton} onPress={inviteByEmail}>
-              <MaterialCommunityIcons name="email-send-outline" size={20} color="#FFFFFF" />
+              <MaterialCommunityIcons name="email-fast-outline" size={20} color="#FFFFFF" />
               <Text style={ui.primaryButtonText}>Create email invite</Text>
             </TouchableOpacity>
 

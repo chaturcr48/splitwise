@@ -40,6 +40,7 @@ export default function SettleUpScreen({ people, groups, expenses, settlements, 
     });
     setAmount('');
     Alert.alert('Payment recorded', 'The settlement was saved in the database.');
+    await refresh();
   };
 
   return (

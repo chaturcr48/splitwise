@@ -65,7 +65,7 @@ export default function InvitesScreen({ groups, invitations, activeGroupId, refr
           <TextInput style={ui.input} placeholder="Friend name" value={invitedName} onChangeText={setInvitedName} />
           <TextInput style={ui.input} placeholder="Friend email" value={invitedEmail} onChangeText={setInvitedEmail} keyboardType="email-address" autoCapitalize="none" />
           <TouchableOpacity style={ui.primaryButton} onPress={sendInvite}>
-            <MaterialCommunityIcons name="email-send-outline" size={20} color="#FFFFFF" />
+            <MaterialCommunityIcons name="email-fast-outline" size={20} color="#FFFFFF" />
             <Text style={ui.primaryButtonText}>Create email invite</Text>
           </TouchableOpacity>
         </View>
