@@ -46,12 +46,15 @@ export default function ActivityScreen({ people, groups, deletedGroups, expenses
           }
 
           if (item.itemType === 'invitation') {
+            const isPhoneInvite = item.channel === 'phone';
             return (
               <View key={item.id} style={ui.rowCard}>
-                <View style={styles.iconBubble}><MaterialCommunityIcons name="email-outline" size={22} color={colors.accent} /></View>
+                <View style={styles.iconBubble}>
+                  <MaterialCommunityIcons name={isPhoneInvite ? 'phone-message-outline' : 'email-outline'} size={22} color={colors.accent} />
+                </View>
                 <View style={styles.main}>
-                  <Text style={ui.title}>Invited {item.invitedName || item.invitedEmail}</Text>
-                  <Text style={ui.meta}>{getGroup(allGroups, item.groupId)?.name} - {item.status}</Text>
+                  <Text style={ui.title}>Invited {item.invitedName || item.invitedEmail || `+${item.invitedPhone}`}</Text>
+                  <Text style={ui.meta}>{getGroup(allGroups, item.groupId)?.name} - {isPhoneInvite ? 'phone' : 'email'} - {item.status}</Text>
                 </View>
                 <Text style={styles.code}>{item.code}</Text>
               </View>

@@ -1,7 +1,8 @@
 import { getDatabase } from './database';
 import { makeId, makeInviteCode, today } from '../utils/ids';
+import { normalizePhoneNumber, phoneEmailFallback } from '../utils/phoneVerification';
 
-import { supabase } from '../src/services/supabase';
+import { supabase, supabaseUrl, supabaseAnonKey } from '../src/services/supabase';
 
 const palette = ['#1CC29F', '#FF7A59', '#5B7CFA', '#B05CFF', '#F5A623', '#20A4F3'];
 
@@ -56,6 +57,11 @@ export async function loadAppState() {
       .order('created_at', { ascending: false }),
   ]);
 
+  const phoneInvitationsResult = await supabase
+    .from('phone_invitations')
+    .select('*')
+    .order('created_at', { ascending: false });
+
   if (usersResult.error) throw usersResult.error;
   if (groupsResult.error) throw groupsResult.error;
   if (membersResult.error) throw membersResult.error;
@@ -64,6 +70,7 @@ export async function loadAppState() {
   if (settlementsResult.error) throw settlementsResult.error;
   if (invitationsResult.error) throw invitationsResult.error;
   if (notificationsResult.error) throw notificationsResult.error;
+  if (phoneInvitationsResult.error) throw phoneInvitationsResult.error;
 
   let people = usersResult.data.map((user) => ({
     ...user,
@@ -105,18 +112,45 @@ export async function loadAppState() {
     date: s.settlement_date,
     createdAt: s.created_at,
   }));
-  const invitations = invitationsResult.data.map((invite) => ({
+  const emailInvitations = invitationsResult.data.map((invite) => ({
     ...invite,
+    channel: 'email',
     groupId: invite.group_id,
     invitedEmail: invite.invited_email,
     invitedName: invite.invited_name,
+    code: invite.code,
     createdAt: invite.created_at,
     acceptedAt: invite.accepted_at,
   }));
-  const notifications = notificationsResult.data;
 
+  const phoneInvitations = phoneInvitationsResult.data.map((invite) => ({
+    ...invite,
+    channel: 'phone',
+    groupId: invite.group_id,
+    invitedPhone: invite.phone_number,
+    invitedName: invite.invited_name,
+    code: invite.verification_code,
+    verificationCode: invite.verification_code,
+    status: invite.status,
+    createdAt: invite.created_at,
+    acceptedAt: invite.verified_at,
+  }));
+
+  const invitations = [...emailInvitations, ...phoneInvitations].sort((a, b) =>
+    String(b.createdAt).localeCompare(String(a.createdAt))
+  );
   const currentUser =
     people.find((person) => person.isCurrentUser) || people[0];
+
+  const notifications = notificationsResult.data
+    .filter((notification) => !currentUser || notification.user_id === currentUser.id)
+    .map((notification) => ({
+      ...notification,
+      groupId: notification.group_id,
+      userId: notification.user_id,
+      createdAt: notification.created_at,
+      readAt: notification.read_at,
+    }));
 
   const activeMemberships = memberRows.filter(
     (member) => !member.left_at
@@ -721,3 +755,312 @@ export async function acceptInvitation({ code, name, email }) {
     .eq('id', invitation.id);
 }
 
+/**
+ * Phone-based invitation functions
+ */
+
+export async function createPhoneInvitation({
+  groupId,
+  phoneNumber,
+  invitedName,
+}) {
+  const cleanPhone = normalizePhoneNumber(phoneNumber);
+  const otp = generatePhoneOTP();
+  const expiryTime = new Date(Date.now() + 5 * 60000).toISOString(); // 5 minutes
+  const verificationCode = makeInviteCode();
+  const trimmedName = invitedName.trim();
+  const now = new Date().toISOString();
+
+  const { data: existingInvitations, error: fetchError } = await supabase
+    .from('phone_invitations')
+    .select('*')
+    .eq('group_id', groupId)
+    .eq('phone_number', cleanPhone)
+    .eq('status', 'pending')
+    .limit(1);
+
+  if (fetchError) {
+    console.log('Phone invitation fetch error:', fetchError);
+    throw fetchError;
+  }
+
+  let data;
+
+  if (existingInvitations?.[0]) {
+    const existing = existingInvitations[0];
+    const { data: updatedInvitation, error: updateError } = await supabase
+      .from('phone_invitations')
+      .update({
+        invited_name: trimmedName || existing.invited_name,
+        otp_code: otp,
+        otp_expires_at: expiryTime,
+        verification_code: verificationCode,
+        status: 'pending',
+        verified_at: null,
+        verified_user_id: null,
+      })
+      .eq('id', existing.id)
+      .select()
+      .single();
+
+    if (updateError) {
+      console.log('Phone invitation update error:', updateError);
+      throw updateError;
+    }
+
+    data = updatedInvitation;
+  } else {
+    const phoneInvitation = {
+      id: makeId('inv'),
+      group_id: groupId,
+      phone_number: cleanPhone,
+      invited_name: trimmedName,
+      otp_code: otp,
+      otp_expires_at: expiryTime,
+      verification_code: verificationCode,
+      status: 'pending',
+      created_at: now,
+    };
+
+    const { data: insertedInvitation, error: insertError } = await supabase
+      .from('phone_invitations')
+      .insert(phoneInvitation)
+      .select()
+      .single();
+
+    if (insertError) {
+      console.log('Phone invitation error:', insertError);
+      throw insertError;
+    }
+
+    data = insertedInvitation;
+  }
+
+  await notifyGroupMembers({
+    groupId,
+    type: 'phone_invite_sent',
+    title: `Phone invite sent to ${trimmedName || cleanPhone.slice(-4)}`,
+    body: `Invite code ${data.verification_code} was sent by mobile message.`,
+  });
+
+  return {
+    id: data.id,
+    groupId: data.group_id,
+    phoneNumber: cleanPhone,
+    invitedName: data.invited_name,
+    otp,
+    verificationCode: data.verification_code,
+    status: data.status,
+    createdAt: data.created_at,
+  };
+}
+
+export async function verifyPhoneOTP({
+  verificationCode,
+  otp,
+  name,
+  phoneNumber,
+}) {
+  const cleanPhone = normalizePhoneNumber(phoneNumber);
+  const verificationCodeUpper = verificationCode.trim().toUpperCase();
+  const otpTrimmed = otp.trim();
+
+  // Find the phone invitation
+  const { data: invitationRows, error: fetchError } = await supabase
+    .from('phone_invitations')
+    .select('*')
+    .eq('verification_code', verificationCodeUpper)
+    .limit(1);
+
+  if (fetchError) throw fetchError;
+
+  const invitation = invitationRows?.[0];
+
+  if (!invitation) {
+    throw new Error('Invitation code not found. Please check the link or code.');
+  }
+
+  if (invitation.status === 'verified') {
+    throw new Error('This invitation has already been verified.');
+  }
+
+  // Check if OTP is expired
+  if (new Date() > new Date(invitation.otp_expires_at)) {
+    throw new Error('OTP has expired. Please request a new invitation.');
+  }
+
+  // Verify OTP matches
+  if (invitation.otp_code !== otpTrimmed) {
+    throw new Error('Incorrect OTP. Please try again.');
+  }
+
+  // Verify phone number matches (last 4 digits)
+  const lastFourInvitation = invitation.phone_number.slice(-4);
+  const lastFourProvided = cleanPhone.slice(-4);
+  
+  if (lastFourInvitation !== lastFourProvided) {
+    throw new Error('Phone number does not match the invitation.');
+  }
+
+  const groupId = invitation.group_id;
+
+  const fallbackEmail = phoneEmailFallback(cleanPhone);
+
+  // Check or create user. Use the fallback email as the lookup key so this
+  // works even when the remote users table has no phone column.
+  const { data: userRows } = await supabase
+    .from('users')
+    .select('id')
+    .eq('email', fallbackEmail)
+    .limit(1);
+
+  const existingUser = userRows?.[0];
+  const userId = existingUser?.id || makeId('u');
+  const now = new Date().toISOString();
+
+  // Create new user if needed
+  if (!existingUser) {
+    const { error: userError } = await supabase
+      .from('users')
+      .insert({
+        id: userId,
+        name: name.trim(),
+        email: fallbackEmail,
+        color: palette[Math.floor(Math.random() * palette.length)],
+        is_current_user: false,
+        created_at: now,
+      });
+
+    if (userError) {
+      console.log('User creation error:', userError);
+      throw userError;
+    }
+  }
+
+  // Add user to group
+  const { error: memberError } = await supabase
+    .from('group_members')
+    .upsert({
+      group_id: groupId,
+      user_id: userId,
+      role: 'member',
+      joined_at: now,
+    });
+
+  if (memberError) throw memberError;
+
+  // Mark invitation as verified
+  const { error: updateError } = await supabase
+    .from('phone_invitations')
+    .update({
+      status: 'verified',
+      verified_at: now,
+      verified_user_id: userId,
+    })
+    .eq('id', invitation.id);
+
+  if (updateError) throw updateError;
+
+  await notifyGroupMembers({
+    groupId,
+    type: 'phone_invite_verified',
+    title: `${name.trim()} joined by phone invite`,
+    body: 'A phone invitation was verified and the person was added to this group.',
+  });
+
+  return {
+    success: true,
+    userId,
+    groupId,
+  };
+}
+
+async function notifyGroupMembers({ groupId, type, title, body }) {
+  const now = new Date().toISOString();
+  const { data: memberRows, error: memberError } = await supabase
+    .from('group_members')
+    .select('user_id')
+    .eq('group_id', groupId)
+    .is('left_at', null);
+
+  if (memberError) {
+    console.log('PHONE INVITE NOTIFICATION MEMBER ERROR:', memberError);
+    return;
+  }
+
+  if (!memberRows?.length) return;
+
+  const notifications = memberRows.map((member) => ({
+    id: makeId('note'),
+    group_id: groupId,
+    user_id: member.user_id,
+    type,
+    title,
+    body,
+    created_at: now,
+  }));
+
+  const { error } = await supabase
+    .from('group_notifications')
+    .insert(notifications);
+
+  if (error) {
+    console.log('PHONE INVITE NOTIFICATION ERROR:', error);
+  }
+}
+
+export async function sendPhoneOTP(phoneNumber, invitationId, otp, verificationCode) {
+  try {
+    const normalizedPhone = normalizePhoneNumber(phoneNumber);
+    const response = await fetch(
+      `${supabaseUrl}/functions/v1/send-sms`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: supabaseAnonKey,
+          Authorization: `Bearer ${supabaseAnonKey}`,
+        },
+        body: JSON.stringify({
+          phoneNumber: `+${normalizedPhone}`,
+          otp,
+          verificationCode,
+          invitationId,
+        }),
+      }
+    );
+
+    const rawBody = await response.text();
+    let data;
+    try {
+      data = rawBody ? JSON.parse(rawBody) : {};
+    } catch {
+      data = { error: rawBody };
+    }
+
+    if (!response.ok) {
+      return {
+        success: false,
+        message: data.error || 'SMS service is not configured.',
+        needsManualSms: true,
+      };
+    }
+
+    return {
+      success: true,
+      message: `SMS sent to ${normalizedPhone.slice(-4)}.`,
+      data,
+    };
+  } catch (error) {
+    console.error('SMS sending error:', error);
+    return {
+      success: false,
+      message: error?.message || 'SMS service is not reachable.',
+      needsManualSms: true,
+    };
+  }
+}
+
+function generatePhoneOTP() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}

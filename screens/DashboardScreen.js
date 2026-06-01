@@ -232,12 +232,15 @@ function ActivityItem({ item, people, groups }) {
   }
 
   if (item.itemType === 'invitation') {
+    const isPhoneInvite = item.channel === 'phone';
     return (
       <View style={ui.rowCard}>
-        <View style={styles.iconBubble}><MaterialCommunityIcons name="email-outline" size={22} color={colors.accent} /></View>
+        <View style={styles.iconBubble}>
+          <MaterialCommunityIcons name={isPhoneInvite ? 'phone-message-outline' : 'email-outline'} size={22} color={colors.accent} />
+        </View>
         <View style={styles.main}>
-          <Text style={ui.title}>Invited {item.invitedName || item.invitedEmail}</Text>
-          <Text style={ui.meta}>Invite {item.status} - code {item.code}</Text>
+          <Text style={ui.title}>Invited {item.invitedName || item.invitedEmail || `+${item.invitedPhone}`}</Text>
+          <Text style={ui.meta}>{isPhoneInvite ? 'Phone' : 'Email'} invite {item.status} - code {item.code}</Text>
         </View>
       </View>
     );

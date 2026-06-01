@@ -101,6 +101,7 @@ async function migrate(db) {
   await ensureColumn(db, 'groups', 'deleted_by', 'TEXT');
   await ensureColumn(db, 'groups', 'restore_code', 'TEXT');
   await ensureColumn(db, 'group_members', 'left_at', 'TEXT');
+  await ensureColumn(db, 'users', 'phone', 'TEXT');
 
   const users = await db.getAllAsync('SELECT id FROM users LIMIT 1;');
   if (users.length === 0) {
