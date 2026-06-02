@@ -9,15 +9,21 @@
       "**/*"
     ],
     "ios": {
-      "supportsTabletMode": true
+      "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#ffffff"
-      }
+      },
+      "package": "com.chatur_48.splitwise"
     },
     "plugins": [
       "expo-sqlite"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "88a6ebfa-ee58-441a-8628-12b231d86609"
+      }
+    }
   }
 }
