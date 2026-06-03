@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import {
   Alert,
   Dimensions,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -136,7 +135,7 @@ export default function PhoneInviteSection({
           <View style={{ width: 28 }} />
         </View>
 
-        <ScrollView style={styles.content}>
+        <View style={styles.content}>
           <Text style={ui.sectionTitle}>Accept Phone Invitation</Text>
           <Text style={styles.description}>
             You received an invitation to join a group. Enter the verification details to join.
@@ -198,7 +197,7 @@ export default function PhoneInviteSection({
               </Text>
             </TouchableOpacity>
           </View>
-        </ScrollView>
+        </View>
       </View>
     );
   }

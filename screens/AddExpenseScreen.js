@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
@@ -12,12 +12,12 @@ import { getGroup, getGroupMembers, splitAmount } from '../utils/balances';
 import { makeId, today } from '../utils/ids';
 import { formatMoney, round2 } from '../utils/money';
 
-export default function AddExpenseScreen({ people, groups, activeGroupId, refreshing, refresh, addExpense }) {
+export default function AddExpenseScreen({ people, groups, activeGroupId, currentUser, refreshing, refresh, addExpense }) {
   const firstGroupId = activeGroupId || groups[0]?.id;
   const [groupId, setGroupId] = useState(firstGroupId);
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
-  const [paidBy, setPaidBy] = useState('you');
+  const [paidBy, setPaidBy] = useState(currentUser?.id || '');
   const [category, setCategory] = useState('Food');
   const [splitType, setSplitType] = useState('equal');
   const [participants, setParticipants] = useState([]);
@@ -34,9 +34,20 @@ export default function AddExpenseScreen({ people, groups, activeGroupId, refres
     const nextMembers = getGroupMembers(getGroup(groups, nextGroupId), people);
     setGroupId(nextGroupId);
     setParticipants(nextMembers.map((member) => member.id));
-    setPaidBy(nextMembers[0]?.id || 'you');
+    setPaidBy(nextMembers.find((member) => member.id === currentUser?.id)?.id || nextMembers[0]?.id || '');
     setCustomValues({});
   };
+
+  useEffect(() => {
+    if (!groupId && firstGroupId) {
+      setGroupId(firstGroupId);
+    }
+  }, [firstGroupId, groupId]);
+
+  useEffect(() => {
+    if (paidBy && members.some((member) => member.id === paidBy)) return;
+    setPaidBy(members.find((member) => member.id === currentUser?.id)?.id || members[0]?.id || '');
+  }, [currentUser?.id, members, paidBy]);
 
   const toggleParticipant = (id) => {
     setParticipants((current) => {
@@ -60,6 +71,10 @@ export default function AddExpenseScreen({ people, groups, activeGroupId, refres
     }
     if (!preview.valid) {
       Alert.alert('Split does not add up', splitType === 'percent' ? 'Percentages must total 100%.' : `Exact shares must total ${formatMoney(parsedAmount)}.`);
+      return;
+    }
+    if (!paidBy) {
+      Alert.alert('Payer needed', 'Choose who paid for this expense.');
       return;
     }
 

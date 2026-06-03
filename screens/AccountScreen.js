@@ -7,11 +7,14 @@ import Avatar from '../components/Avatar';
 import { ui } from '../components/uiStyles';
 import { colors } from '../theme';
 
-export default function AccountScreen({ people, currentUser, refreshing, refresh, updateCurrentUser, addFriend }) {
+export default function AccountScreen({ people, currentUser, refreshing, refresh, updateCurrentUser, addFriend, signOut, updatePassword }) {
   const [profileName, setProfileName] = useState(currentUser?.name || '');
   const [profileEmail, setProfileEmail] = useState(currentUser?.email || '');
   const [friendName, setFriendName] = useState('');
   const [friendEmail, setFriendEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordLoading, setPasswordLoading] = useState(false);
 
   useEffect(() => {
     setProfileName(currentUser?.name || '');
@@ -24,7 +27,7 @@ export default function AccountScreen({ people, currentUser, refreshing, refresh
       return;
     }
     await updateCurrentUser({ name: profileName, email: profileEmail });
-    Alert.alert('Profile saved', 'Your local user profile was updated.');
+    Alert.alert('Profile saved', 'Your database profile was updated.');
   };
 
   const saveFriend = async () => {
@@ -37,6 +40,30 @@ export default function AccountScreen({ people, currentUser, refreshing, refresh
     setFriendEmail('');
   };
 
+  const changePassword = async () => {
+    if (newPassword.length < 6) {
+      Alert.alert('Password too short', 'Password must be at least 6 characters.');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      Alert.alert('Password mismatch', 'Both password fields must match.');
+      return;
+    }
+
+    try {
+      setPasswordLoading(true);
+      await updatePassword({ password: newPassword });
+      setNewPassword('');
+      setConfirmPassword('');
+      Alert.alert('Password updated', 'Use your new password the next time you log in.');
+    } catch (err) {
+      Alert.alert('Password update failed', err.message || 'Unable to update your password.');
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
+
   return (
     <AppScrollView style={ui.screen} contentContainerStyle={ui.screenPad} refreshing={refreshing} onRefresh={refresh}>
       <Text style={ui.sectionTitle}>Your profile</Text>
@@ -46,6 +73,34 @@ export default function AccountScreen({ people, currentUser, refreshing, refresh
         <TouchableOpacity style={ui.primaryButton} onPress={saveProfile}>
           <MaterialCommunityIcons name="content-save" size={20} color="#FFFFFF" />
           <Text style={ui.primaryButtonText}>Save profile</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.signOutButton} onPress={signOut}>
+          <MaterialCommunityIcons name="logout" size={20} color={colors.danger} />
+          <Text style={styles.signOutText}>Logout</Text>
+        </TouchableOpacity>
+      </View>
+
+      <Text style={ui.sectionTitle}>Change password</Text>
+      <View style={ui.card}>
+        <TextInput
+          style={ui.input}
+          placeholder="New password"
+          value={newPassword}
+          onChangeText={setNewPassword}
+          secureTextEntry
+          editable={!passwordLoading}
+        />
+        <TextInput
+          style={ui.input}
+          placeholder="Confirm new password"
+          value={confirmPassword}
+          onChangeText={setConfirmPassword}
+          secureTextEntry
+          editable={!passwordLoading}
+        />
+        <TouchableOpacity style={[ui.primaryButton, passwordLoading && styles.disabled]} onPress={changePassword} disabled={passwordLoading}>
+          <MaterialCommunityIcons name="lock-reset" size={20} color="#FFFFFF" />
+          <Text style={ui.primaryButtonText}>{passwordLoading ? 'Updating...' : 'Update password'}</Text>
         </TouchableOpacity>
       </View>
 
@@ -86,5 +141,23 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     paddingHorizontal: 9,
     paddingVertical: 5,
+  },
+  signOutButton: {
+    alignItems: 'center',
+    borderColor: colors.danger,
+    borderRadius: 7,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'center',
+    marginTop: 10,
+    padding: 12,
+  },
+  signOutText: {
+    color: colors.danger,
+    fontWeight: '900',
+  },
+  disabled: {
+    opacity: 0.65,
   },
 });

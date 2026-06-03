@@ -135,7 +135,7 @@ export default function InvitesScreen({ groups, invitations, activeGroupId, refr
                           : 'phone-clock-outline'
                         : invite.status === 'accepted'
                         ? 'email-check-outline'
-                        : 'email-clock-outline'
+                        : 'email-outline'
                     }
                     size={22}
                     color={colors.accent}

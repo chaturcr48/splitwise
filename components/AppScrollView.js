@@ -1,20 +1,27 @@
 import React from 'react';
-import { RefreshControl, ScrollView } from 'react-native';
+import { KeyboardAvoidingView, Platform, RefreshControl, ScrollView } from 'react-native';
 
 import { colors } from '../theme';
 
 export default function AppScrollView({ children, contentContainerStyle, onRefresh, refreshing, style }) {
   return (
-    <ScrollView
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
       style={style}
-      contentContainerStyle={contentContainerStyle}
-      refreshControl={
-        onRefresh ? (
-          <RefreshControl refreshing={Boolean(refreshing)} onRefresh={onRefresh} tintColor={colors.accent} colors={[colors.accent]} />
-        ) : undefined
-      }
     >
-      {children}
-    </ScrollView>
+      <ScrollView
+        contentContainerStyle={contentContainerStyle}
+        keyboardDismissMode="on-drag"
+        keyboardShouldPersistTaps="handled"
+        refreshControl={
+          onRefresh ? (
+            <RefreshControl refreshing={Boolean(refreshing)} onRefresh={onRefresh} tintColor={colors.accent} colors={[colors.accent]} />
+          ) : undefined
+        }
+      >
+        {children}
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }

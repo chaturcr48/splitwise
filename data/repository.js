@@ -1,4 +1,3 @@
-import { getDatabase } from './database';
 import { makeId, makeInviteCode, today } from '../utils/ids';
 import { normalizePhoneNumber, phoneEmailFallback } from '../utils/phoneVerification';
 
@@ -6,8 +5,122 @@ import { supabase, supabaseUrl, supabaseAnonKey } from '../src/services/supabase
 
 const palette = ['#1CC29F', '#FF7A59', '#5B7CFA', '#B05CFF', '#F5A623', '#20A4F3'];
 
+export async function getUserProfile(authUser) {
+  if (!authUser?.id) return null;
 
-export async function loadAppState() {
+  const { data, error } = await supabase
+    .from('users')
+    .select('*')
+    .eq('id', authUser.id)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) return null;
+
+  return { ...data, isCurrentUser: true };
+}
+
+export async function ensureUserProfile(authUser, { name } = {}) {
+  const profileName =
+    name?.trim() ||
+    authUser.user_metadata?.full_name ||
+    authUser.email?.split('@')[0] ||
+    'User';
+  const email = authUser.email?.trim().toLowerCase() || '';
+
+  const { data: existingRows, error: fetchError } = await supabase
+    .from('users')
+    .select('*')
+    .eq('id', authUser.id)
+    .limit(1);
+
+  if (fetchError) throw fetchError;
+
+  if (existingRows?.[0]) {
+    const updates = { email };
+    if (name?.trim()) updates.name = profileName;
+
+    const { data, error } = await supabase
+      .from('users')
+      .update(updates)
+      .eq('id', authUser.id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return { ...data, isCurrentUser: true };
+  }
+
+  if (email) {
+    const { data: emailRows, error: emailFetchError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', email)
+      .limit(1);
+
+    if (emailFetchError) throw emailFetchError;
+
+    const claimedProfile = emailRows?.[0];
+    if (claimedProfile) {
+      await claimExistingUserProfile(claimedProfile.id, authUser.id);
+
+      const { data, error } = await supabase
+        .from('users')
+        .update({
+          id: authUser.id,
+          name: name?.trim() || claimedProfile.name || profileName,
+          email,
+          is_current_user: false,
+        })
+        .eq('id', claimedProfile.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return { ...data, isCurrentUser: true };
+    }
+  }
+
+  const { data, error } = await supabase
+    .from('users')
+    .insert({
+      id: authUser.id,
+      name: profileName,
+      email,
+      color: palette[Math.floor(Math.random() * palette.length)],
+      is_current_user: false,
+      created_at: new Date().toISOString(),
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return { ...data, isCurrentUser: true };
+}
+
+async function claimExistingUserProfile(oldUserId, newUserId) {
+  const updates = [
+    supabase.from('group_members').update({ user_id: newUserId }).eq('user_id', oldUserId),
+    supabase.from('group_notifications').update({ user_id: newUserId }).eq('user_id', oldUserId),
+    supabase.from('expense_shares').update({ user_id: newUserId }).eq('user_id', oldUserId),
+    supabase.from('expenses').update({ paid_by: newUserId }).eq('paid_by', oldUserId),
+    supabase.from('settlements').update({ from_user_id: newUserId }).eq('from_user_id', oldUserId),
+    supabase.from('settlements').update({ to_user_id: newUserId }).eq('to_user_id', oldUserId),
+    supabase.from('groups').update({ created_by: newUserId }).eq('created_by', oldUserId),
+    supabase.from('groups').update({ deleted_by: newUserId }).eq('deleted_by', oldUserId),
+    supabase.from('phone_invitations').update({ verified_user_id: newUserId }).eq('verified_user_id', oldUserId),
+  ];
+
+  const results = await Promise.all(updates);
+  const failed = results.find((result) => result.error);
+  if (failed?.error) throw failed.error;
+}
+
+export async function loadAppState(currentUserId) {
+  if (!currentUserId) {
+    throw new Error('Please login to continue.');
+  }
+
   const [
     usersResult,
     groupsResult,
@@ -74,73 +187,15 @@ export async function loadAppState() {
 
   let people = usersResult.data.map((user) => ({
     ...user,
-    isCurrentUser: user.is_current_user,
+    isCurrentUser: user.id === currentUserId,
   }));
-
-  if (people.length === 0) {
-    const defaultUser = {
-      id: 'you',
-      name: 'You',
-      email: '',
-      color: '#1CC29F',
-      is_current_user: true,
-      created_at: new Date().toISOString(),
-    };
-
-    const { error } = await supabase
-      .from('users')
-      .insert(defaultUser);
-
-    if (error) {
-      console.log('DEFAULT USER ERROR:', error);
-      throw error;
-    }
-
-    return await loadAppState();
-  }
 
   const groupRows = groupsResult.data;
   const memberRows = membersResult.data;
   const expenseRows = expensesResult.data;
   const shareRows = sharesResult.data;
-  // const settlements = settlementsResult.data;
-  const settlements = settlementsResult.data.map((s) => ({
-    ...s,
-    groupId: s.group_id,
-    from: s.from_user_id,
-    to: s.to_user_id,
-    date: s.settlement_date,
-    createdAt: s.created_at,
-  }));
-  const emailInvitations = invitationsResult.data.map((invite) => ({
-    ...invite,
-    channel: 'email',
-    groupId: invite.group_id,
-    invitedEmail: invite.invited_email,
-    invitedName: invite.invited_name,
-    code: invite.code,
-    createdAt: invite.created_at,
-    acceptedAt: invite.accepted_at,
-  }));
-
-  const phoneInvitations = phoneInvitationsResult.data.map((invite) => ({
-    ...invite,
-    channel: 'phone',
-    groupId: invite.group_id,
-    invitedPhone: invite.phone_number,
-    invitedName: invite.invited_name,
-    code: invite.verification_code,
-    verificationCode: invite.verification_code,
-    status: invite.status,
-    createdAt: invite.created_at,
-    acceptedAt: invite.verified_at,
-  }));
-
-  const invitations = [...emailInvitations, ...phoneInvitations].sort((a, b) =>
-    String(b.createdAt).localeCompare(String(a.createdAt))
-  );
   const currentUser =
-    people.find((person) => person.isCurrentUser) || people[0];
+    people.find((person) => person.id === currentUserId);
 
   const notifications = notificationsResult.data
     .filter((notification) => !currentUser || notification.user_id === currentUser.id)
@@ -163,6 +218,55 @@ export async function loadAppState() {
           !currentUser || member.user_id === currentUser.id
       )
       .map((member) => member.group_id)
+  );
+
+  const visibleExpenseRows = expenseRows.filter((expense) =>
+    visibleGroupIds.has(expense.group_id)
+  );
+
+  const visibleExpenseIds = new Set(visibleExpenseRows.map((expense) => expense.id));
+
+  const settlements = settlementsResult.data
+    .filter((settlement) => visibleGroupIds.has(settlement.group_id))
+    .map((s) => ({
+      ...s,
+      groupId: s.group_id,
+      from: s.from_user_id,
+      to: s.to_user_id,
+      date: s.settlement_date,
+      createdAt: s.created_at,
+    }));
+
+  const emailInvitations = invitationsResult.data
+    .filter((invite) => visibleGroupIds.has(invite.group_id))
+    .map((invite) => ({
+      ...invite,
+      channel: 'email',
+      groupId: invite.group_id,
+      invitedEmail: invite.invited_email,
+      invitedName: invite.invited_name,
+      code: invite.code,
+      createdAt: invite.created_at,
+      acceptedAt: invite.accepted_at,
+    }));
+
+  const phoneInvitations = phoneInvitationsResult.data
+    .filter((invite) => visibleGroupIds.has(invite.group_id))
+    .map((invite) => ({
+      ...invite,
+      channel: 'phone',
+      groupId: invite.group_id,
+      invitedPhone: invite.phone_number,
+      invitedName: invite.invited_name,
+      code: invite.verification_code,
+      verificationCode: invite.verification_code,
+      status: invite.status,
+      createdAt: invite.created_at,
+      acceptedAt: invite.verified_at,
+    }));
+
+  const invitations = [...emailInvitations, ...phoneInvitations].sort((a, b) =>
+    String(b.createdAt).localeCompare(String(a.createdAt))
   );
 
   const groups = groupRows
@@ -201,7 +305,7 @@ export async function loadAppState() {
         visibleGroupIds.has(group.id)
     );
 
-  const expenses = expenseRows.map((expense) => ({
+  const expenses = visibleExpenseRows.map((expense) => ({
     ...expense,
     groupId: expense.group_id,
     paidBy: expense.paid_by,
@@ -210,7 +314,7 @@ export async function loadAppState() {
     createdAt: expense.created_at,
     shares: Object.fromEntries(
       shareRows
-        .filter((share) => share.expense_id === expense.id)
+        .filter((share) => share.expense_id === expense.id && visibleExpenseIds.has(share.expense_id))
         .map((share) => [share.user_id, share.amount])
     ),
   }));
@@ -226,14 +330,14 @@ export async function loadAppState() {
   };
 }
 
-export async function updateCurrentUser({ name, email }) {
+export async function updateCurrentUser({ userId, name, email }) {
   const { error } = await supabase
     .from('users')
     .update({
       name: name.trim(),
       email: email.trim().toLowerCase(),
     })
-    .eq('is_current_user', true);
+    .eq('id', userId);
 
   if (error) {
     console.log('UPDATE USER ERROR:', error);
@@ -904,22 +1008,35 @@ export async function verifyPhoneOTP({
 
   const groupId = invitation.group_id;
 
+  const now = new Date().toISOString();
   const fallbackEmail = phoneEmailFallback(cleanPhone);
 
-  // Check or create user. Use the fallback email as the lookup key so this
-  // works even when the remote users table has no phone column.
-  const { data: userRows } = await supabase
+  // Phone invites belong to the invited phone number, not to whichever user is
+  // currently logged in on this device.
+  const { data: userRows, error: userFetchError } = await supabase
     .from('users')
     .select('id')
     .eq('email', fallbackEmail)
     .limit(1);
 
+  if (userFetchError) throw userFetchError;
+
   const existingUser = userRows?.[0];
   const userId = existingUser?.id || makeId('u');
-  const now = new Date().toISOString();
 
-  // Create new user if needed
-  if (!existingUser) {
+  if (existingUser) {
+    const { error: userUpdateError } = await supabase
+      .from('users')
+      .update({
+        name: name.trim(),
+      })
+      .eq('id', userId);
+
+    if (userUpdateError) {
+      console.log('User update error:', userUpdateError);
+      throw userUpdateError;
+    }
+  } else {
     const { error: userError } = await supabase
       .from('users')
       .insert({
@@ -945,6 +1062,7 @@ export async function verifyPhoneOTP({
       user_id: userId,
       role: 'member',
       joined_at: now,
+      left_at: null,
     });
 
   if (memberError) throw memberError;

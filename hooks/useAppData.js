@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import * as repo from '../data/repository';
 
-export function useAppData() {
+export function useAppData(authProfile) {
   const [state, setState] = useState({
     people: [],
     groups: [],
@@ -17,17 +17,22 @@ export function useAppData() {
   const [error, setError] = useState('');
 
   const refresh = useCallback(async () => {
+    if (!authProfile?.id) {
+      setLoading(false);
+      return;
+    }
+
     try {
       setRefreshing(true);
       setError('');
-      setState(await repo.loadAppState());
+      setState(await repo.loadAppState(authProfile.id));
     } catch (err) {
       setError(err.message || 'Unable to load app data.');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [authProfile?.id]);
 
   useEffect(() => {
     refresh();
@@ -43,8 +48,8 @@ export function useAppData() {
   );
 
   const currentUser = useMemo(
-    () => state.people.find((person) => person.isCurrentUser) || state.people[0],
-    [state.people]
+    () => state.people.find((person) => person.id === authProfile?.id) || authProfile,
+    [authProfile, state.people]
   );
 
   return {
@@ -54,13 +59,13 @@ export function useAppData() {
     refreshing,
     error,
     refresh,
-    updateCurrentUser: (payload) => mutate(() => repo.updateCurrentUser(payload)),
+    updateCurrentUser: (payload) => mutate(() => repo.updateCurrentUser({ ...payload, userId: currentUser?.id })),
     addFriend: (payload) => mutate(() => repo.addFriend(payload)),
-    createGroup: (payload) => mutate(() => repo.createGroup({ ...payload, currentUserId: currentUser?.id || 'you' })),
-    addGroupMembers: (groupId, memberIds) => mutate(() => repo.addGroupMembers({ groupId, memberIds, addedBy: currentUser?.id || 'you' })),
-    leaveGroup: (groupId) => mutate(() => repo.leaveGroup({ groupId, userId: currentUser?.id || 'you' })),
-    deleteGroup: (groupId) => mutate(() => repo.deleteGroup({ groupId, userId: currentUser?.id || 'you' })),
-    restoreGroup: (restoreCode) => mutate(() => repo.restoreGroup({ restoreCode, userId: currentUser?.id || 'you' })),
+    createGroup: (payload) => mutate(() => repo.createGroup({ ...payload, currentUserId: currentUser?.id })),
+    addGroupMembers: (groupId, memberIds) => mutate(() => repo.addGroupMembers({ groupId, memberIds, addedBy: currentUser?.id })),
+    leaveGroup: (groupId) => mutate(() => repo.leaveGroup({ groupId, userId: currentUser?.id })),
+    deleteGroup: (groupId) => mutate(() => repo.deleteGroup({ groupId, userId: currentUser?.id })),
+    restoreGroup: (restoreCode) => mutate(() => repo.restoreGroup({ restoreCode, userId: currentUser?.id })),
     addExpense: (payload) => mutate(() => repo.addExpense(payload)),
     deleteExpense: (expenseId) => mutate(() => repo.deleteExpense(expenseId)),
     recordSettlement: (payload) => mutate(() => repo.recordSettlement(payload)),

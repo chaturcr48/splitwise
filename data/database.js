@@ -103,17 +103,6 @@ async function migrate(db) {
   await ensureColumn(db, 'group_members', 'left_at', 'TEXT');
   await ensureColumn(db, 'users', 'phone', 'TEXT');
 
-  const users = await db.getAllAsync('SELECT id FROM users LIMIT 1;');
-  if (users.length === 0) {
-    await db.runAsync(
-      'INSERT INTO users (id, name, email, color, is_current_user, created_at) VALUES (?, ?, ?, ?, 1, ?);',
-      'you',
-      'You',
-      '',
-      '#1CC29F',
-      new Date().toISOString()
-    );
-  }
 }
 
 async function ensureColumn(db, table, column, definition) {

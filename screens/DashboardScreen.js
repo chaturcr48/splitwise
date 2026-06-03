@@ -35,16 +35,16 @@ export default function DashboardScreen({
   const payments = useMemo(() => simplifyDebts(balances, people), [balances, people]);
   const activeGroup = groups.find((group) => group.id === activeGroupId);
   const visibleGroups = activeGroup ? [activeGroup] : groups;
-  const youBalance = balances.you || 0;
+  const currentUserBalance = balances[currentUser?.id] || 0;
 
   return (
     <AppScrollView style={ui.screen} contentContainerStyle={ui.screenPad} refreshing={refreshing} onRefresh={refresh}>
       <View style={styles.hero}>
         <View style={styles.heroText}>
           <Text style={styles.heroLabel}>{activeGroup ? activeGroup.name : 'Your balance'}</Text>
-          <Text style={[styles.heroAmount, youBalance >= 0 ? styles.good : styles.bad]}>
-            {youBalance >= 0 ? 'You are owed ' : 'You owe '}
-            {formatMoney(youBalance)}
+          <Text style={[styles.heroAmount, currentUserBalance >= 0 ? styles.good : styles.bad]}>
+            {currentUserBalance >= 0 ? 'You are owed ' : 'You owe '}
+            {formatMoney(currentUserBalance)}
           </Text>
         </View>
         <TouchableOpacity style={styles.heroButton} onPress={onSettle}>
@@ -72,13 +72,13 @@ export default function DashboardScreen({
           createInvitation={createInvitation}
         />
       ) : (
-        <HomeGroups groups={visibleGroups} people={people} expenses={expenses} settlements={settlements} onOpenGroup={onOpenGroup} onAddExpense={onAddExpense} />
+        <HomeGroups groups={visibleGroups} people={people} expenses={expenses} settlements={settlements} currentUser={currentUser} onOpenGroup={onOpenGroup} onAddExpense={onAddExpense} />
       )}
     </AppScrollView>
   );
 }
 
-function HomeGroups({ groups, people, expenses, settlements, onOpenGroup, onAddExpense }) {
+function HomeGroups({ groups, people, expenses, settlements, currentUser, onOpenGroup, onAddExpense }) {
   return (
     <>
       <View style={styles.actionRow}>
@@ -94,7 +94,7 @@ function HomeGroups({ groups, people, expenses, settlements, onOpenGroup, onAddE
       ) : (
         groups.map((group) => {
           const groupBalances = calculateBalances(people, expenses, settlements, group.id);
-          const mine = groupBalances.you || 0;
+          const mine = groupBalances[currentUser?.id] || 0;
           const members = getGroupMembers(group, people);
           return (
             <TouchableOpacity key={group.id} style={ui.rowCard} onPress={() => onOpenGroup(group.id)}>

@@ -1,13 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { BackHandler, Dimensions, PanResponder, SafeAreaView, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { BackHandler, Dimensions, PanResponder, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import Header from './components/Header';
 import TabBar from './components/TabBar';
+import { useAuth } from './hooks/useAuth';
 import { useAppData } from './hooks/useAppData';
 import AccountScreen from './screens/AccountScreen';
 import ActivityScreen from './screens/ActivityScreen';
 import AddExpenseScreen from './screens/AddExpenseScreen';
+import AuthScreen from './screens/AuthScreen';
 import DashboardScreen from './screens/DashboardScreen';
 import GroupsScreen from './screens/GroupsScreen';
 import InvitesScreen from './screens/InvitesScreen';
@@ -15,7 +18,8 @@ import SettleUpScreen from './screens/SettleUpScreen';
 import { colors } from './theme';
 
 export default function App() {
-  const data = useAppData();
+  const auth = useAuth();
+  const data = useAppData(auth.profile);
   const [tab, setTab] = useState('dashboard');
   const [activeGroupId, setActiveGroupId] = useState(null);
 
@@ -66,7 +70,7 @@ export default function App() {
   };
 
   const renderContent = () => {
-    if (data.loading) {
+    if (auth.loading || data.loading) {
       return (
         <View style={styles.centered}>
           <MaterialCommunityIcons name="database-sync" size={36} color={colors.accent} />
@@ -75,13 +79,17 @@ export default function App() {
       );
     }
 
-    if (data.error) {
+    if (auth.error || data.error) {
       return (
         <View style={styles.centered}>
           <MaterialCommunityIcons name="alert-circle-outline" size={38} color={colors.danger} />
-          <Text style={styles.errorText}>{data.error}</Text>
+          <Text style={styles.errorText}>{auth.error || data.error}</Text>
         </View>
       );
+    }
+
+    if (!auth.session || !auth.profile) {
+      return <AuthScreen resetPassword={auth.resetPassword} signIn={auth.signIn} signUp={auth.signUp} />;
     }
 
     if (tab === 'dashboard') {
@@ -117,15 +125,15 @@ export default function App() {
       return <ActivityScreen {...data} />;
     }
 
-    return <AccountScreen {...data} />;
+    return <AccountScreen {...data} signOut={auth.signOut} updatePassword={auth.updatePassword} />;
   };
 
   return (
     <SafeAreaView style={styles.app} {...backSwipeResponder.panHandlers}>
       <StatusBar barStyle="dark-content" />
-      <Header activeGroup={activeGroup} onBack={() => setActiveGroupId(null)} />
+      {auth.session && auth.profile ? <Header activeGroup={activeGroup} onBack={() => setActiveGroupId(null)} /> : null}
       {renderContent()}
-      <TabBar activeTab={tab} onChange={changeTab} />
+      {auth.session && auth.profile ? <TabBar activeTab={tab} onChange={changeTab} /> : null}
     </SafeAreaView>
   );
 }
