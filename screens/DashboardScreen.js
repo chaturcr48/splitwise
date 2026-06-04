@@ -6,9 +6,12 @@ import AppScrollView from '../components/AppScrollView';
 import Avatar from '../components/Avatar';
 import EmptyState from '../components/EmptyState';
 import { ui } from '../components/uiStyles';
+import { createPhoneInvitation, sendPhoneOTP } from '../data/repository';
 import { colors } from '../theme';
 import { calculateBalances, getGroup, getGroupMembers, getPerson, simplifyDebts } from '../utils/balances';
+import { buildPhoneInviteMessage, openSmsInvite } from '../utils/mobileMessaging';
 import { formatMoney } from '../utils/money';
+import { formatPhoneNumber, isValidPhoneNumber } from '../utils/phoneVerification';
 
 export default function DashboardScreen({
   people,
@@ -70,6 +73,7 @@ export default function DashboardScreen({
           deleteGroup={deleteGroup}
           addGroupMembers={addGroupMembers}
           createInvitation={createInvitation}
+          refresh={refresh}
         />
       ) : (
         <HomeGroups groups={visibleGroups} people={people} expenses={expenses} settlements={settlements} currentUser={currentUser} onOpenGroup={onOpenGroup} onAddExpense={onAddExpense} />
@@ -133,6 +137,7 @@ function GroupDetail({
   deleteGroup,
   addGroupMembers,
   createInvitation,
+  refresh,
 }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const members = getGroupMembers(group, people);
@@ -211,6 +216,7 @@ function GroupDetail({
         deleteGroup={deleteGroup}
         addGroupMembers={addGroupMembers}
         createInvitation={createInvitation}
+        refresh={refresh}
         onGroupClosed={onGroupClosed}
       />
     </>
@@ -282,6 +288,7 @@ function GroupSettingsModal({
   deleteGroup,
   addGroupMembers,
   createInvitation,
+  refresh,
   onGroupClosed,
 }) {
   const memberIds = members.map((member) => member.id);
@@ -289,6 +296,9 @@ function GroupSettingsModal({
   const [selectedPeople, setSelectedPeople] = useState([]);
   const [inviteName, setInviteName] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
+  const [phoneInviteName, setPhoneInviteName] = useState('');
+  const [phoneInviteNumber, setPhoneInviteNumber] = useState('');
+  const [phoneInviteLoading, setPhoneInviteLoading] = useState(false);
 
   const togglePerson = (id) => {
     setSelectedPeople((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
@@ -316,6 +326,62 @@ function GroupSettingsModal({
     setInviteName('');
     setInviteEmail('');
     Alert.alert('Invitation created', `Invite code: ${invitation.code}`);
+  };
+
+  const inviteBySms = async () => {
+    if (!phoneInviteName.trim()) {
+      Alert.alert('Invite details needed', 'Enter the name.');
+      return;
+    }
+
+    if (!isValidPhoneNumber(phoneInviteNumber)) {
+      Alert.alert('Invalid phone number', 'Enter a valid phone number.');
+      return;
+    }
+
+    try {
+      setPhoneInviteLoading(true);
+      const invitation = await createPhoneInvitation({
+        groupId: group.id,
+        phoneNumber: phoneInviteNumber,
+        invitedName: phoneInviteName,
+      });
+
+      const smsResult = await sendPhoneOTP(
+        phoneInviteNumber,
+        invitation.id,
+        invitation.otp,
+        invitation.verificationCode
+      );
+
+      const message = buildPhoneInviteMessage({
+        groupName: group.name,
+        otp: invitation.otp,
+        verificationCode: invitation.verificationCode,
+      });
+
+      let manualSmsResult = null;
+      if (!smsResult?.success) {
+        manualSmsResult = await openSmsInvite({
+          phoneNumber: phoneInviteNumber,
+          message,
+        });
+      }
+
+      await refresh?.();
+      setPhoneInviteName('');
+      setPhoneInviteNumber('');
+      Alert.alert(
+        'SMS invitation created',
+        smsResult?.success
+          ? `SMS sent to ${formatPhoneNumber(phoneInviteNumber)}.`
+          : manualSmsResult?.message || `Share OTP ${invitation.otp} and code ${invitation.verificationCode} manually.`
+      );
+    } catch (err) {
+      Alert.alert('SMS invite failed', err.message || 'Unable to create SMS invite.');
+    } finally {
+      setPhoneInviteLoading(false);
+    }
   };
 
   const warnBeforeGroupAction = (actionLabel, action) => {
@@ -393,6 +459,14 @@ function GroupSettingsModal({
             <TouchableOpacity style={ui.primaryButton} onPress={inviteByEmail}>
               <MaterialCommunityIcons name="email-fast-outline" size={20} color="#FFFFFF" />
               <Text style={ui.primaryButtonText}>Create email invite</Text>
+            </TouchableOpacity>
+
+            <Text style={ui.sectionTitle}>Invite by SMS</Text>
+            <TextInput style={ui.input} placeholder="Friend name" value={phoneInviteName} onChangeText={setPhoneInviteName} editable={!phoneInviteLoading} />
+            <TextInput style={ui.input} placeholder="Friend phone number" value={phoneInviteNumber} onChangeText={setPhoneInviteNumber} keyboardType="phone-pad" editable={!phoneInviteLoading} />
+            <TouchableOpacity style={[ui.primaryButton, phoneInviteLoading && styles.disabledButton]} onPress={inviteBySms} disabled={phoneInviteLoading}>
+              <MaterialCommunityIcons name="phone-message-outline" size={20} color="#FFFFFF" />
+              <Text style={ui.primaryButtonText}>{phoneInviteLoading ? 'Sending...' : 'Create SMS invite'}</Text>
             </TouchableOpacity>
 
             <Text style={ui.sectionTitle}>Danger zone</Text>
@@ -593,6 +667,9 @@ const styles = StyleSheet.create({
   dangerButtonText: {
     color: '#FFFFFF',
     fontWeight: '900',
+  },
+  disabledButton: {
+    opacity: 0.6,
   },
   modalShade: {
     backgroundColor: 'rgba(23,32,42,0.35)',

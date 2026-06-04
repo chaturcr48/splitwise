@@ -185,7 +185,7 @@ export async function loadAppState(currentUserId) {
   if (notificationsResult.error) throw notificationsResult.error;
   if (phoneInvitationsResult.error) throw phoneInvitationsResult.error;
 
-  let people = usersResult.data.map((user) => ({
+  const allPeople = usersResult.data.map((user) => ({
     ...user,
     isCurrentUser: user.id === currentUserId,
   }));
@@ -195,7 +195,7 @@ export async function loadAppState(currentUserId) {
   const expenseRows = expensesResult.data;
   const shareRows = sharesResult.data;
   const currentUser =
-    people.find((person) => person.id === currentUserId);
+    allPeople.find((person) => person.id === currentUserId);
 
   const notifications = notificationsResult.data
     .filter((notification) => !currentUser || notification.user_id === currentUser.id)
@@ -219,6 +219,13 @@ export async function loadAppState(currentUserId) {
       )
       .map((member) => member.group_id)
   );
+
+  const visiblePeopleIds = new Set([currentUserId]);
+  activeMemberships
+    .filter((member) => visibleGroupIds.has(member.group_id))
+    .forEach((member) => visiblePeopleIds.add(member.user_id));
+
+  const people = allPeople.filter((person) => visiblePeopleIds.has(person.id));
 
   const visibleExpenseRows = expenseRows.filter((expense) =>
     visibleGroupIds.has(expense.group_id)
