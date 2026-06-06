@@ -1,4 +1,5 @@
 import { makeId, makeInviteCode, today } from '../utils/ids';
+import { logError } from '../utils/logger';
 import { normalizePhoneNumber, phoneEmailFallback } from '../utils/phoneVerification';
 
 import { supabase, supabaseUrl, supabaseAnonKey } from '../src/services/supabase';
@@ -347,27 +348,7 @@ export async function updateCurrentUser({ userId, name, email }) {
     .eq('id', userId);
 
   if (error) {
-    console.log('UPDATE USER ERROR:', error);
-    throw error;
-  }
-}
-
-export async function addFriend({ name, email }) {
-  const user = {
-    id: makeId('u'),
-    name: name.trim(),
-    email: email.trim().toLowerCase(),
-    color: palette[Math.floor(Math.random() * palette.length)],
-    is_current_user: false,
-    created_at: new Date().toISOString(),
-  };
-
-  const { error } = await supabase
-    .from('users')
-    .insert(user);
-
-  if (error) {
-    console.log('ADD FRIEND ERROR:', error);
+    logError('UPDATE USER ERROR:', error);
     throw error;
   }
 }
@@ -407,7 +388,7 @@ export async function createGroup({
     });
 
   if (groupError) {
-    console.log('GROUP ERROR:', groupError);
+    logError('GROUP ERROR:', groupError);
     throw groupError;
   }
 
@@ -426,7 +407,7 @@ export async function createGroup({
     .insert(memberRows);
 
   if (memberError) {
-    console.log('GROUP MEMBER ERROR:', memberError);
+    logError('GROUP MEMBER ERROR:', memberError);
     throw memberError;
   }
 
@@ -448,7 +429,7 @@ export async function addGroupMembers({
       .single();
 
   if (groupError) {
-    console.log('GROUP FETCH ERROR:', groupError);
+    logError('GROUP FETCH ERROR:', groupError);
     throw groupError;
   }
 
@@ -460,7 +441,7 @@ export async function addGroupMembers({
       .single();
 
   if (actorError) {
-    console.log('ACTOR FETCH ERROR:', actorError);
+    logError('ACTOR FETCH ERROR:', actorError);
     throw actorError;
   }
 
@@ -484,7 +465,7 @@ export async function addGroupMembers({
     });
 
   if (insertError) {
-    console.log('GROUP MEMBER INSERT ERROR:', insertError);
+    logError('GROUP MEMBER INSERT ERROR:', insertError);
     throw insertError;
   }
 
@@ -496,7 +477,7 @@ export async function addGroupMembers({
       .is('left_at', null);
 
   if (memberError) {
-    console.log('MEMBER FETCH ERROR:', memberError);
+    logError('MEMBER FETCH ERROR:', memberError);
     throw memberError;
   }
 
@@ -515,7 +496,7 @@ export async function addGroupMembers({
     .insert(notifications);
 
   if (notificationError) {
-    console.log(
+    logError(
       'NOTIFICATION INSERT ERROR:',
       notificationError
     );
@@ -715,7 +696,7 @@ export async function addExpense(expense) {
     });
 
   if (expenseError) {
-    console.log(expenseError);
+    logError(expenseError);
     throw expenseError;
   }
 
@@ -732,7 +713,7 @@ export async function addExpense(expense) {
     .insert(shares);
 
   if (shareError) {
-    console.log(shareError);
+    logError(shareError);
     throw shareError;
   }
 }
@@ -764,7 +745,7 @@ export async function recordSettlement(settlement) {
     });
 
   if (error) {
-    console.log(error);
+    logError(error);
     throw error;
   }
 }
@@ -789,7 +770,7 @@ export async function createInvitation({
     .insert(invitation);
 
   if (error) {
-    console.log(error);
+    logError(error);
     throw error;
   }
 
@@ -804,8 +785,13 @@ export async function createInvitation({
   };
 }
 
-export async function acceptInvitation({ code, name, email }) {
+export async function acceptInvitation({ code, currentUserEmail, currentUserId, currentUserName }) {
   const inviteCode = code.trim().toUpperCase();
+  const email = currentUserEmail?.trim().toLowerCase();
+
+  if (!currentUserId || !email) {
+    throw new Error('Please login before accepting an invitation.');
+  }
 
   const { data: rows } = await supabase
     .from('invitations')
@@ -823,38 +809,41 @@ export async function acceptInvitation({ code, name, email }) {
     throw new Error('That invitation was already accepted.');
   }
 
-  const { data: userRows } = await supabase
-    .from('users')
-    .select('id')
-    .eq('email', email.trim().toLowerCase())
+  if (invitation.invited_email !== email) {
+    throw new Error(`This invite was sent to ${invitation.invited_email}. Login with that email to accept it.`);
+  }
+
+  const { data: existingMemberRows, error: memberFetchError } = await supabase
+    .from('group_members')
+    .select('user_id')
+    .eq('group_id', invitation.group_id)
+    .eq('user_id', currentUserId)
+    .is('left_at', null)
     .limit(1);
 
-  const existingUser = userRows?.[0];
-
-  const userId = existingUser?.id || makeId('u');
+  if (memberFetchError) throw memberFetchError;
+  if (existingMemberRows?.[0]) {
+    throw new Error('You are already a member of this group.');
+  }
 
   const now = new Date().toISOString();
 
-  if (!existingUser) {
-    await supabase
-      .from('users')
-      .insert({
-        id: userId,
-        name: name.trim(),
-        email: email.trim().toLowerCase(),
-        color: palette[Math.floor(Math.random() * palette.length)],
-        is_current_user: false,
-        created_at: now,
-      });
-  }
+  await ensureUserProfile({
+    id: currentUserId,
+    email,
+    user_metadata: {
+      full_name: currentUserName,
+    },
+  }, { name: currentUserName });
 
   await supabase
     .from('group_members')
     .upsert({
       group_id: invitation.group_id,
-      user_id: userId,
+      user_id: currentUserId,
       role: 'member',
       joined_at: now,
+      left_at: null,
     });
 
   await supabase
@@ -891,7 +880,7 @@ export async function createPhoneInvitation({
     .limit(1);
 
   if (fetchError) {
-    console.log('Phone invitation fetch error:', fetchError);
+    logError('Phone invitation fetch error:', fetchError);
     throw fetchError;
   }
 
@@ -915,7 +904,7 @@ export async function createPhoneInvitation({
       .single();
 
     if (updateError) {
-      console.log('Phone invitation update error:', updateError);
+      logError('Phone invitation update error:', updateError);
       throw updateError;
     }
 
@@ -940,7 +929,7 @@ export async function createPhoneInvitation({
       .single();
 
     if (insertError) {
-      console.log('Phone invitation error:', insertError);
+      logError('Phone invitation error:', insertError);
       throw insertError;
     }
 
@@ -971,6 +960,9 @@ export async function verifyPhoneOTP({
   otp,
   name,
   phoneNumber,
+  currentUserEmail,
+  currentUserId,
+  currentUserName,
 }) {
   const cleanPhone = normalizePhoneNumber(phoneNumber);
   const verificationCodeUpper = verificationCode.trim().toUpperCase();
@@ -1017,47 +1009,69 @@ export async function verifyPhoneOTP({
 
   const now = new Date().toISOString();
   const fallbackEmail = phoneEmailFallback(cleanPhone);
+  let userId = currentUserId;
 
-  // Phone invites belong to the invited phone number, not to whichever user is
-  // currently logged in on this device.
-  const { data: userRows, error: userFetchError } = await supabase
-    .from('users')
-    .select('id')
-    .eq('email', fallbackEmail)
-    .limit(1);
+  if (userId) {
+    const { data: existingMemberRows, error: memberFetchError } = await supabase
+      .from('group_members')
+      .select('user_id')
+      .eq('group_id', groupId)
+      .eq('user_id', userId)
+      .is('left_at', null)
+      .limit(1);
 
-  if (userFetchError) throw userFetchError;
-
-  const existingUser = userRows?.[0];
-  const userId = existingUser?.id || makeId('u');
-
-  if (existingUser) {
-    const { error: userUpdateError } = await supabase
-      .from('users')
-      .update({
-        name: name.trim(),
-      })
-      .eq('id', userId);
-
-    if (userUpdateError) {
-      console.log('User update error:', userUpdateError);
-      throw userUpdateError;
+    if (memberFetchError) throw memberFetchError;
+    if (existingMemberRows?.[0]) {
+      throw new Error('You are already a member of this group. Ask the invited person to login on their own phone and accept this invite.');
     }
-  } else {
-    const { error: userError } = await supabase
-      .from('users')
-      .insert({
-        id: userId,
-        name: name.trim(),
-        email: fallbackEmail,
-        color: palette[Math.floor(Math.random() * palette.length)],
-        is_current_user: false,
-        created_at: now,
-      });
 
-    if (userError) {
-      console.log('User creation error:', userError);
-      throw userError;
+    await ensureUserProfile({
+      id: currentUserId,
+      email: currentUserEmail || fallbackEmail,
+      user_metadata: {
+        full_name: currentUserName || name.trim(),
+      },
+    }, { name: currentUserName || name.trim() });
+  } else {
+    const { data: userRows, error: userFetchError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', fallbackEmail)
+      .limit(1);
+
+    if (userFetchError) throw userFetchError;
+
+    const existingUser = userRows?.[0];
+    userId = existingUser?.id || makeId('u');
+
+    if (existingUser) {
+      const { error: userUpdateError } = await supabase
+        .from('users')
+        .update({
+          name: name.trim(),
+        })
+        .eq('id', userId);
+
+      if (userUpdateError) {
+        logError('User update error:', userUpdateError);
+        throw userUpdateError;
+      }
+    } else {
+      const { error: userError } = await supabase
+        .from('users')
+        .insert({
+          id: userId,
+          name: name.trim(),
+          email: fallbackEmail,
+          color: palette[Math.floor(Math.random() * palette.length)],
+          is_current_user: false,
+          created_at: now,
+        });
+
+      if (userError) {
+        logError('User creation error:', userError);
+        throw userError;
+      }
     }
   }
 
@@ -1109,7 +1123,7 @@ async function notifyGroupMembers({ groupId, type, title, body }) {
     .is('left_at', null);
 
   if (memberError) {
-    console.log('PHONE INVITE NOTIFICATION MEMBER ERROR:', memberError);
+    logError('PHONE INVITE NOTIFICATION MEMBER ERROR:', memberError);
     return;
   }
 
@@ -1130,7 +1144,7 @@ async function notifyGroupMembers({ groupId, type, title, body }) {
     .insert(notifications);
 
   if (error) {
-    console.log('PHONE INVITE NOTIFICATION ERROR:', error);
+    logError('PHONE INVITE NOTIFICATION ERROR:', error);
   }
 }
 
@@ -1177,7 +1191,7 @@ export async function sendPhoneOTP(phoneNumber, invitationId, otp, verificationC
       data,
     };
   } catch (error) {
-    console.error('SMS sending error:', error);
+    logError('SMS sending error:', error);
     return {
       success: false,
       message: error?.message || 'SMS service is not reachable.',

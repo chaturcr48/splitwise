@@ -60,7 +60,6 @@ export function useAppData(authProfile) {
     error,
     refresh,
     updateCurrentUser: (payload) => mutate(() => repo.updateCurrentUser({ ...payload, userId: currentUser?.id })),
-    addFriend: (payload) => mutate(() => repo.addFriend(payload)),
     createGroup: (payload) => mutate(() => repo.createGroup({ ...payload, currentUserId: currentUser?.id })),
     addGroupMembers: (groupId, memberIds) => mutate(() => repo.addGroupMembers({ groupId, memberIds, addedBy: currentUser?.id })),
     leaveGroup: (groupId) => mutate(() => repo.leaveGroup({ groupId, userId: currentUser?.id })),
@@ -76,6 +75,11 @@ export function useAppData(authProfile) {
       });
       return invitation;
     },
-    acceptInvitation: (payload) => mutate(() => repo.acceptInvitation(payload)),
+    acceptInvitation: (payload) => mutate(() => repo.acceptInvitation({
+      ...payload,
+      currentUserEmail: currentUser?.email,
+      currentUserId: currentUser?.id,
+      currentUserName: currentUser?.name,
+    })),
   };
 }

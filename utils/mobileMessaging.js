@@ -4,7 +4,7 @@ import { formatPhoneNumber, normalizePhoneNumber } from './phoneVerification';
 
 export function buildPhoneInviteMessage({ groupName, otp, verificationCode }) {
   return [
-    `You have been invited to join "${groupName}" in Splitwise.`,
+    `You have been invited to join "${groupName}" in FairSplit.`,
     `OTP: ${otp}`,
     `Invite code: ${verificationCode}`,
     'Open the app, go to Invites > Phone > Enter Verification Code, then enter these details.',

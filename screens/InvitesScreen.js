@@ -11,14 +11,12 @@ import { getGroup } from '../utils/balances';
 import { buildPhoneInviteMessage, openSmsInvite } from '../utils/mobileMessaging';
 import { createPhoneInvitation, sendPhoneOTP, verifyPhoneOTP } from '../data/repository';
 
-export default function InvitesScreen({ groups, invitations, activeGroupId, refreshing, refresh, createInvitation, acceptInvitation }) {
+export default function InvitesScreen({ groups, invitations, activeGroupId, currentUser, refreshing, refresh, createInvitation, acceptInvitation }) {
   const [activeTab, setActiveTab] = useState('email'); // 'email' or 'phone'
   const [groupId, setGroupId] = useState(activeGroupId || groups[0]?.id);
   const [invitedName, setInvitedName] = useState('');
   const [invitedEmail, setInvitedEmail] = useState('');
   const [acceptCode, setAcceptCode] = useState('');
-  const [acceptName, setAcceptName] = useState('');
-  const [acceptEmail, setAcceptEmail] = useState('');
 
   const sendInvite = async () => {
     if (!groupId || !invitedEmail.trim() || !invitedName.trim()) {
@@ -36,16 +34,14 @@ export default function InvitesScreen({ groups, invitations, activeGroupId, refr
   };
 
   const acceptInvite = async () => {
-    if (!acceptCode.trim() || !acceptName.trim() || !acceptEmail.trim()) {
-      Alert.alert('Invitation details needed', 'Enter the code, name, and email to accept.');
+    if (!acceptCode.trim()) {
+      Alert.alert('Invitation code needed', 'Enter the invite code.');
       return;
     }
     try {
-      await acceptInvitation({ code: acceptCode, name: acceptName, email: acceptEmail });
+      await acceptInvitation({ code: acceptCode });
       setAcceptCode('');
-      setAcceptName('');
-      setAcceptEmail('');
-      Alert.alert('Invitation accepted', 'The friend can now see the group and its activity in this database.');
+      Alert.alert('Invitation accepted', 'This group is now connected to your account.');
     } catch (err) {
       Alert.alert('Could not accept invite', err.message);
     }
@@ -111,9 +107,8 @@ export default function InvitesScreen({ groups, invitations, activeGroupId, refr
 
           <Text style={ui.sectionTitle}>Accept invitation</Text>
           <View style={ui.card}>
+            <Text style={ui.meta}>Accepting as {currentUser?.email || 'your logged-in account'}.</Text>
             <TextInput style={ui.input} placeholder="Invite code" value={acceptCode} onChangeText={setAcceptCode} autoCapitalize="characters" />
-            <TextInput style={ui.input} placeholder="Friend name" value={acceptName} onChangeText={setAcceptName} />
-            <TextInput style={ui.input} placeholder="Friend email" value={acceptEmail} onChangeText={setAcceptEmail} keyboardType="email-address" autoCapitalize="none" />
             <TouchableOpacity style={ui.primaryButton} onPress={acceptInvite}>
               <MaterialCommunityIcons name="check-decagram-outline" size={20} color="#FFFFFF" />
               <Text style={ui.primaryButtonText}>Accept invite</Text>
@@ -227,6 +222,9 @@ export default function InvitesScreen({ groups, invitations, activeGroupId, refr
         otp,
         name,
         phoneNumber,
+        currentUserEmail: currentUser?.email,
+        currentUserId: currentUser?.id,
+        currentUserName: currentUser?.name,
       });
       refresh(); // Refresh to update group memberships
     } catch (err) {

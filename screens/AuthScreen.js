@@ -40,7 +40,7 @@ export default function AuthScreen({ resetPassword, signIn, signUp }) {
         await signIn({ email, password });
       }
     } catch (err) {
-      Alert.alert(mode === 'signUp' ? 'Signup failed' : 'Login failed', err.message);
+      Alert.alert(mode === 'signUp' ? 'Signup failed' : 'Login failed', getAuthErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -55,9 +55,9 @@ export default function AuthScreen({ resetPassword, signIn, signUp }) {
     try {
       setLoading(true);
       await resetPassword({ email });
-      Alert.alert('Reset email sent', 'Open the email from Supabase to set a new password.');
+      Alert.alert('Check your email', 'If this email has an account, a password reset link will be sent shortly.');
     } catch (err) {
-      Alert.alert('Reset failed', err.message || 'Unable to send reset email.');
+      Alert.alert('Reset failed', getAuthErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -119,9 +119,32 @@ export default function AuthScreen({ resetPassword, signIn, signUp }) {
             <Text style={styles.linkText}>Forgot password?</Text>
           </TouchableOpacity>
         ) : null}
+
+        {mode === 'signUp' ? (
+          <Text style={styles.helperText}>Use an email you can access if email confirmation is enabled.</Text>
+        ) : null}
       </View>
     </AppScrollView>
   );
+}
+
+function getAuthErrorMessage(error) {
+  const message = String(error?.message || '').trim();
+  const lowerMessage = message.toLowerCase();
+
+  if (lowerMessage.includes('email rate limit') || lowerMessage.includes('rate limit')) {
+    return 'Too many signup or password-reset emails were requested recently. Please wait a few minutes and try again, or ask the app admin to configure Supabase SMTP/email limits.';
+  }
+
+  if (lowerMessage.includes('invalid login credentials')) {
+    return 'Email or password is incorrect.';
+  }
+
+  if (lowerMessage.includes('email not confirmed')) {
+    return 'Please confirm your email first, then login.';
+  }
+
+  return message || 'Something went wrong. Please try again.';
 }
 
 const styles = StyleSheet.create({
@@ -176,5 +199,12 @@ const styles = StyleSheet.create({
   linkText: {
     color: colors.accent,
     fontWeight: '800',
+  },
+  helperText: {
+    color: colors.muted,
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 12,
+    textAlign: 'center',
   },
 });

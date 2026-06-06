@@ -1,4 +1,4 @@
-# Splitwise React Native App
+# FairSplit React Native App
 
 A beginner-friendly React Native app for tracking shared expenses and managing money between friends. Built with Expo and React Navigation.
 
@@ -13,7 +13,7 @@ A beginner-friendly React Native app for tracking shared expenses and managing m
 ## Project Structure
 
 ```
-splitwise/
+fairsplit/
 ├── App.js                 # Main app entry point with navigation setup
 ├── app.json              # Expo configuration
 ├── package.json          # Dependencies and scripts

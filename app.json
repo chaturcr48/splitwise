@@ -1,9 +1,10 @@
 {
   "expo": {
-    "name": "Splitwise",
-    "slug": "splitwise",
+    "name": "FairSplit",
+    "slug": "fairsplit",
     "version": "1.0.0",
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "assetBundlePatterns": [
       "**/*"
@@ -13,13 +14,12 @@
     },
     "android": {
       "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.chatur_48.splitwise"
+      "versionCode": 1,
+      "package": "com.chatur48.fairsplit"
     },
-    "plugins": [
-      "expo-sqlite"
-    ],
     "extra": {
       "eas": {
         "projectId": "88a6ebfa-ee58-441a-8628-12b231d86609"

@@ -7,11 +7,9 @@ import Avatar from '../components/Avatar';
 import { ui } from '../components/uiStyles';
 import { colors } from '../theme';
 
-export default function AccountScreen({ people, currentUser, refreshing, refresh, updateCurrentUser, addFriend, signOut, updatePassword }) {
+export default function AccountScreen({ people, currentUser, refreshing, refresh, updateCurrentUser, signOut, updatePassword }) {
   const [profileName, setProfileName] = useState(currentUser?.name || '');
   const [profileEmail, setProfileEmail] = useState(currentUser?.email || '');
-  const [friendName, setFriendName] = useState('');
-  const [friendEmail, setFriendEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordLoading, setPasswordLoading] = useState(false);
@@ -28,16 +26,6 @@ export default function AccountScreen({ people, currentUser, refreshing, refresh
     }
     await updateCurrentUser({ name: profileName, email: profileEmail });
     Alert.alert('Profile saved', 'Your database profile was updated.');
-  };
-
-  const saveFriend = async () => {
-    if (!friendName.trim() || !friendEmail.trim()) {
-      Alert.alert('Friend details needed', 'Enter a name and email.');
-      return;
-    }
-    await addFriend({ name: friendName, email: friendEmail });
-    setFriendName('');
-    setFriendEmail('');
   };
 
   const changePassword = async () => {
@@ -101,16 +89,6 @@ export default function AccountScreen({ people, currentUser, refreshing, refresh
         <TouchableOpacity style={[ui.primaryButton, passwordLoading && styles.disabled]} onPress={changePassword} disabled={passwordLoading}>
           <MaterialCommunityIcons name="lock-reset" size={20} color="#FFFFFF" />
           <Text style={ui.primaryButtonText}>{passwordLoading ? 'Updating...' : 'Update password'}</Text>
-        </TouchableOpacity>
-      </View>
-
-      <Text style={ui.sectionTitle}>Add friend manually</Text>
-      <View style={ui.card}>
-        <TextInput style={ui.input} placeholder="Friend name" value={friendName} onChangeText={setFriendName} />
-        <TextInput style={ui.input} placeholder="Friend email" value={friendEmail} onChangeText={setFriendEmail} keyboardType="email-address" autoCapitalize="none" />
-        <TouchableOpacity style={ui.primaryButton} onPress={saveFriend}>
-          <MaterialCommunityIcons name="account-plus" size={20} color="#FFFFFF" />
-          <Text style={ui.primaryButtonText}>Add friend</Text>
         </TouchableOpacity>
       </View>
 
